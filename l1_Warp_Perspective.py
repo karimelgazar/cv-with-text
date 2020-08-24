@@ -183,72 +183,129 @@ def apply_top_view(image, pts):
     return warped
 
 
-#!==============
-# ? الخطوة رقم 0
-# ? قراءة الصورة
-#!==============
-image = cv2.imread("./images/page.jpg")
+def make_page_upright(src):
 
-original_height, original_width = image.shape[:2]
-new_height = 400
-cv2.imshow("image", image)
-cv2.waitKey(0)
+    image = None
+    if isinstance(src, str):  # مسار الصورة هو المعطى للدالة
+        image = cv2.imread(src)
+    else:  # الصورة نفسها المعطى للدالة
+        image = src
 
-# ? خلى الطول 400 بكسل والقيمة دى هنحتاجها فيما بعد
-ratio = original_height / new_height
+    original_height, original_width = image.shape[:2]
+    new_height = 400
 
-#!==============
-# ? الخطوة رقم 1
-# ? عملنا تصغير للصورة عشان تبقى العمليات اسرع + عمليات أساسية
-#!==============
-small_image = resize(image, height=new_height)
-cv2.imshow("image", small_image)
-cv2.waitKey(0)
+    # ? خلى الطول 400 بكسل والقيمة دى هنحتاجها فيما بعد
+    h_ratio = original_height / new_height
 
-gray_small_image = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
-cv2.imshow("image", gray_small_image)
-cv2.waitKey(0)
+    #!==============
+    # ? الخطوة رقم 1
+    # ? عملنا تصغير للصورة عشان تبقى العمليات اسرع + عمليات أساسية
+    #!==============
+    small_image = resize(image, height=new_height)
 
-blurred_gray_small_image = cv2.GaussianBlur(gray_small_image, (9, 9), 0)
-cv2.imshow("image", blurred_gray_small_image)
-cv2.waitKey(0)
+    #! مهم جدا عشان ممكن تسبب اخطاء ولو لم تطبق تلك الحطوة
+    w_ratio = original_width / small_image.shape[1]
 
-canny_blurred_gray_small_image = cv2.Canny(blurred_gray_small_image, 120, 240)
-cv2.imshow("image", canny_blurred_gray_small_image)
-cv2.waitKey(0)
+    gray_small_image = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
+    blurred_gray_small_image = cv2.GaussianBlur(gray_small_image, (9, 9), 0)
+    canny_blurred_gray_small_image = cv2.Canny(
+        blurred_gray_small_image, 120, 240)
 
-#!==============
-# ? الخطوة رقم 2
-# ? تحديد حدود الورقة
-#!==============
-copy = small_image.copy()
-cnts = cv2.findContours(canny_blurred_gray_small_image,
-                        cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+    #!==============
+    # ? الخطوة رقم 2
+    # ? تحديد حدود الورقة
+    #!==============
+    copy = small_image.copy()
+    cnts = cv2.findContours(canny_blurred_gray_small_image,
+                            cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
 
-biggest_contour = sorted(cnts, key=cv2.contourArea, reverse=True)[0]
-cv2.drawContours(copy, [biggest_contour], -1, (0, 255, 0), 2)
-cv2.imshow("image", copy)
-cv2.waitKey(0)
+    biggest_contour = sorted(cnts, key=cv2.contourArea, reverse=True)[0]
+
+    #!==============
+    # ? الخطوة رقم 3
+    # ? تحديد نقط اركان الورقة
+    #!==============
+    unordered_corners = get_corner_points(biggest_contour)
+    #!  خطوة مهمة جدا
+    corners = order_corner_points_clockwise(unordered_corners)
+    #!==============
+    # ? الخطوة رقم 4
+    # ? تعديل منظر الورقة
+    #!==============
+    #! 👉👉👉👉 خطوة مهمة جدا 👈👈👈👈
+    new_corners = np.zeros((4, 2), dtype="float32")
+    for i in range(len(corners)):
+        new_corners[i] = [corners[i][0] * w_ratio, corners[i][1] * h_ratio]
+
+    return apply_top_view(image, new_corners)
 
 
-#!==============
-# ? الخطوة رقم 3
-# ? تحديد نقط اركان الورقة
-#!==============
-unordered_corners = get_corner_points(biggest_contour)
-print(len(unordered_corners))
-draw_corners(copy.copy(), unordered_corners)
+# #!==============
+# # ? الخطوة رقم 0
+# # ? قراءة الصورة
+# #!==============
+# image = cv2.imread("./images/page.jpg")
 
-#! خطوة مهمة جدا
-corners = order_corner_points_clockwise(unordered_corners)
-draw_corners(copy, corners)
-#!==============
-# ? الخطوة رقم 4
-# ? تعديل منظر الورقة
-#!==============
-new_image = apply_top_view(image, np.float32(corners)*ratio)
-cv2.imshow("image", resize(new_image, height=400))
-cv2.waitKey(0)
+# original_height, original_width = image.shape[:2]
+# new_height = 400
+# cv2.imshow("image", image)
+# cv2.waitKey(0)
+
+# # ? خلى الطول 400 بكسل والقيمة دى هنحتاجها فيما بعد
+# ratio = original_height / new_height
+
+# #!==============
+# # ? الخطوة رقم 1
+# # ? عملنا تصغير للصورة عشان تبقى العمليات اسرع + عمليات أساسية
+# #!==============
+# small_image = resize(image, height=new_height)
+# cv2.imshow("image", small_image)
+# cv2.waitKey(0)
+
+# gray_small_image = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
+# cv2.imshow("image", gray_small_image)
+# cv2.waitKey(0)
+
+# blurred_gray_small_image = cv2.GaussianBlur(gray_small_image, (9, 9), 0)
+# cv2.imshow("image", blurred_gray_small_image)
+# cv2.waitKey(0)
+
+# canny_blurred_gray_small_image = cv2.Canny(blurred_gray_small_image, 120, 240)
+# cv2.imshow("image", canny_blurred_gray_small_image)
+# cv2.waitKey(0)
+
+# #!==============
+# # ? الخطوة رقم 2
+# # ? تحديد حدود الورقة
+# #!==============
+# copy = small_image.copy()
+# cnts = cv2.findContours(canny_blurred_gray_small_image,
+#                         cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+
+# biggest_contour = sorted(cnts, key=cv2.contourArea, reverse=True)[0]
+# cv2.drawContours(copy, [biggest_contour], -1, (0, 255, 0), 2)
+# cv2.imshow("image", copy)
+# cv2.waitKey(0)
+
+
+# #!==============
+# # ? الخطوة رقم 3
+# # ? تحديد نقط اركان الورقة
+# #!==============
+# unordered_corners = get_corner_points(biggest_contour)
+# print(len(unordered_corners))
+# draw_corners(copy.copy(), unordered_corners)
+
+# #! خطوة مهمة جدا
+# corners = order_corner_points_clockwise(unordered_corners)
+# draw_corners(copy, corners)
+# #!==============
+# # ? الخطوة رقم 4
+# # ? تعديل منظر الورقة
+# #!==============
+# new_image = apply_top_view(image, np.float32(corners)*ratio)
+# cv2.imshow("image", resize(new_image, height=400))
+# cv2.waitKey(0)
 
 #!==============
 # ? الخطوة رقم 5
